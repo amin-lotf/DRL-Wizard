@@ -113,15 +113,22 @@ def render_config_form(
                         key=key, help=help_text
                     )
 
+
                 elif _is_float_like(v):
                     minv = meta.get("minimum") if meta else None
                     maxv = meta.get("maximum") if meta else None
-                    step = 0.001
+                    # smaller step so tiny LRs don't vanish
+                    step = 1e-6
                     current_config[k] = st.number_input(
-                        label, value=float(v), step=step,
+                        label,
+                        value=float(v),
+                        step=step,
+                        format="%.8f",  # show up to 8 decimal places
                         min_value=float(minv) if isinstance(minv, (int, float)) else None,
                         max_value=float(maxv) if isinstance(maxv, (int, float)) else None,
-                        key=key, help=help_text
+                        key=key,
+                        help=help_text,
+
                     )
 
                 elif isinstance(v, (list, dict)):

@@ -5,6 +5,7 @@
 **DRL Wizard** is a lightweight, modular Deep Reinforcement Learning toolkit for training, comparing, and understanding modern RL algorithms across diverse environments. It provides a clean workflow with a FastAPI backend, Streamlit UI, structured logging, and support for multiple concurrent training jobs.
 
 ---
+<img src ="assets/start.png" width=400 height=235> | <img src ="assets/results.png" width=400 height=235>
 
 ## 🚀 Features
 
