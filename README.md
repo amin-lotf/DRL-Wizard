@@ -1,6 +1,4 @@
 # DRL Wizard
-# DRL Wizard
-
 [![PyPI Version](https://img.shields.io/pypi/v/drl-wizard.svg)](https://pypi.org/project/drl-wizard/)
 
 
