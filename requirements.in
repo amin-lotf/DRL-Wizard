@@ -1,0 +1,16 @@
+--index-url https://pypi.org/simple
+
+sqlalchemy
+aiosqlite
+tensorboard
+gymnasium[atari,mujoco]
+gymnasium-robotics
+mpe2
+fastapi[standard]
+uvicorn[standard]
+streamlit
+pandas
+pandas-stubs
+stable-baselines3
+ale-py
+opencv-python

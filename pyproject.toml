@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drl-wizard"
+version = "0.1.1"
+description = "Deep Reinforcement Learning training platform"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Amin Lotfolahi" }]
+
+# core dependencies (you can adjust later)
+dependencies = [
+  # Core runtime deps
+  "sqlalchemy>=2.0",
+  "aiosqlite>=0.20",
+  "tensorboard>=2.14",
+  "gymnasium[atari,mujoco]>=0.29",
+  "gymnasium-robotics>=1.2",
+  "mpe2>=0.0.1",                # ensure this exists on PyPI
+  "fastapi[standard]>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pandas>=2.2",
+  "stable-baselines3>=2.3",
+  "ale-py>=0.10",
+  "opencv-python>=4.9",
+]
+
+[project.optional-dependencies]
+ui = [
+  "streamlit>=1.38",
+  "pandas-stubs>=2.2",
+]
+
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.6",
+  "mypy>=1.10",
+]
+
+# optional CLI commands
+[project.scripts]
+drl-wizard-api = "drl_wizard.backend.cli:main"
+drl-wizard-ui  = "drl_wizard.frontend.streamlit_app.cli:main"
+drl-wizard-run = "drl_wizard.cli:main"
+
+# tell setuptools where to find your package (under src/)
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["drl_wizard*"]
