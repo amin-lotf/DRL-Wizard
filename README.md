@@ -1,4 +1,8 @@
 # DRL Wizard
+# DRL Wizard
+
+[![PyPI Version](https://img.shields.io/pypi/v/drl-wizard.svg)](https://pypi.org/project/drl-wizard/)
+
 
 **DRL Wizard** is a lightweight, modular Deep Reinforcement Learning toolkit for training, comparing, and understanding modern RL algorithms across diverse environments. It provides a clean workflow with a FastAPI backend, Streamlit UI, structured logging, and support for multiple concurrent training jobs.
 
