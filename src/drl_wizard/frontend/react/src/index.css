@@ -73,4 +73,31 @@
   .code-block {
     @apply overflow-x-auto rounded-lg border border-border bg-page/70 p-4 text-sm leading-6 text-[#d6e7df];
   }
+
+  .side-panel-shell {
+    @apply xl:sticky xl:top-6 xl:flex xl:max-h-[calc(100vh-8rem)] xl:flex-col xl:overflow-hidden;
+  }
+
+  .side-panel-scroll {
+    @apply xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+  }
+
+  .side-panel-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .side-panel-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .side-panel-scroll::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgba(148, 163, 184, 0.28);
+  }
+
+  .side-panel-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.4);
+  }
 }

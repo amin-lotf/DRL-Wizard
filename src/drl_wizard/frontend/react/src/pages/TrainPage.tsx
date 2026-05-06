@@ -693,8 +693,9 @@ export function TrainPage() {
             eyebrow="Runs"
             title="Running and recent runs"
             description="Nothing is auto-selected. Use the controls below to explicitly monitor a run."
+            className="side-panel-shell"
           >
-            <div className="space-y-4">
+            <div className="side-panel-scroll space-y-4">
               <div>
                 <div className="label mb-3">Running now</div>
                 <div className="space-y-2">
@@ -730,7 +731,6 @@ export function TrainPage() {
                   )}
                 </div>
               </div>
-
               <div>
                 <div className="label mb-3">Recent runs</div>
                 <div className="space-y-2">

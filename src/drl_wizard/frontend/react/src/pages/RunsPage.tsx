@@ -77,54 +77,7 @@ export function RunsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <SectionCard
-          eyebrow="Runs"
-          title="Saved jobs"
-          description="Choose a run to inspect. The right side updates only for the selected run."
-        >
-          <div className="space-y-3">
-            {(jobs.data ?? []).map((job) => (
-              <button
-                key={job.job_id}
-                type="button"
-                onClick={() => setSelectedJobId(job.job_id ?? null)}
-                className={`w-full rounded-lg border p-4 text-left transition ${
-                  selectedJobId === job.job_id
-                    ? "border-accent bg-accent/10"
-                    : "border-border bg-page/60 hover:border-accent/40"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-text">{getJobDisplayName(job)}</div>
-                    <div className="mt-1 text-xs text-muted">{formatDateTime(job.created_at)}</div>
-                    <div className="mt-2 text-xs text-muted">
-                      {job.env?.env_id ?? "Unknown env"} · {job.algo?.algo_name ?? "Unknown algo"}
-                    </div>
-                  </div>
-                  <StatusBadge status={job.status} />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="rounded-full border border-border bg-page/70 px-2.5 py-1 text-xs text-muted">
-                    Run {job.job_id ?? "-"}
-                  </span>
-                  {job.detail ? (
-                    <span className="rounded-full border border-border bg-page/70 px-2.5 py-1 text-xs text-muted">
-                      {job.detail}
-                    </span>
-                  ) : null}
-                </div>
-              </button>
-            ))}
-            {!jobs.loading && !jobs.data?.length ? (
-              <div className="rounded-lg border border-border bg-page/50 p-4 text-sm text-muted">
-                No jobs are currently stored.
-              </div>
-            ) : null}
-          </div>
-        </SectionCard>
-
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-4">
           <SectionCard
             eyebrow="Selection"
@@ -132,7 +85,7 @@ export function RunsPage() {
             description={
               selectedJobId
                 ? "Run details, actions, and metrics for the selected job."
-                : "Select a run from the left to load its details and metrics."
+                : "Select a run from the right panel to load its details and metrics."
             }
             action={
               selectedJobId ? (
@@ -249,7 +202,7 @@ export function RunsPage() {
               </div>
             ) : (
               <div className="rounded-lg border border-border bg-page/50 p-4 text-sm text-muted">
-                Select a run from the left column.
+                Select a run from the right column.
               </div>
             )}
           </SectionCard>
@@ -282,6 +235,54 @@ export function RunsPage() {
             </>
           ) : null}
         </div>
+
+        <SectionCard
+          eyebrow="Runs"
+          title="Saved jobs"
+          description="Choose a run to inspect. The main workspace updates only for the selected run."
+          className="side-panel-shell"
+        >
+          <div className="side-panel-scroll space-y-3">
+            {(jobs.data ?? []).map((job) => (
+              <button
+                key={job.job_id}
+                type="button"
+                onClick={() => setSelectedJobId(job.job_id ?? null)}
+                className={`w-full rounded-lg border p-4 text-left transition ${
+                  selectedJobId === job.job_id
+                    ? "border-accent bg-accent/10"
+                    : "border-border bg-page/60 hover:border-accent/40"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-text">{getJobDisplayName(job)}</div>
+                    <div className="mt-1 text-xs text-muted">{formatDateTime(job.created_at)}</div>
+                    <div className="mt-2 text-xs text-muted">
+                      {job.env?.env_id ?? "Unknown env"} · {job.algo?.algo_name ?? "Unknown algo"}
+                    </div>
+                  </div>
+                  <StatusBadge status={job.status} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-border bg-page/70 px-2.5 py-1 text-xs text-muted">
+                    Run {job.job_id ?? "-"}
+                  </span>
+                  {job.detail ? (
+                    <span className="rounded-full border border-border bg-page/70 px-2.5 py-1 text-xs text-muted">
+                      {job.detail}
+                    </span>
+                  ) : null}
+                </div>
+              </button>
+            ))}
+            {!jobs.loading && !jobs.data?.length ? (
+              <div className="rounded-lg border border-border bg-page/50 p-4 text-sm text-muted">
+                No jobs are currently stored.
+              </div>
+            ) : null}
+          </div>
+        </SectionCard>
       </div>
     </div>
   );
