@@ -1,0 +1,50 @@
+services:
+  app:
+    build: .
+    image: aminook/drlwizard:0.1.0
+    container_name: drl_wizard_app
+    environment:
+      DATABASE_PATH: /app/db/drl.db
+    volumes:
+        - ./db:/app/db
+    ports:
+      - "${API_PORT:-8000}:${API_PORT:-8000}"
+
+  streamlit:
+    build: .
+    image: aminook/drlwizard:0.1.0
+    container_name: drl_wizard_streamlit
+    profiles:
+      - streamlit
+    environment:
+      API_BASE_URL: http://app:8000
+    command: >
+      sh -c "streamlit run src/drl_wizard/frontend/streamlit_app.py
+      --server.address ${STREAMLIT_HOST:-0.0.0.0}
+      --server.port ${STREAMLIT_PORT:-8501}"
+    ports:
+      - "${STREAMLIT_PORT:-8501}:${STREAMLIT_PORT:-8501}"
+    depends_on:
+      - app
+
+
+  react:
+    image: node:22-alpine
+    container_name: drl_wizard_react
+    profiles:
+      - react
+    working_dir: /app/src/drl_wizard/frontend/react
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - .:/app
+      - react_node_modules:/app/src/drl_wizard/frontend/react/node_modules
+    ports:
+      - "${REACT_PORT:-5173}:${REACT_PORT:-5173}"
+    depends_on:
+      - app
+
+volumes:
+  react_node_modules:
