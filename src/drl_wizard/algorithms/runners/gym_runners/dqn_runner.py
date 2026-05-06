@@ -9,8 +9,13 @@ from drl_wizard.backend.services.logging.json_logger import SegmentedJsonlLogger
 
 
 class DQNRunner(Runner):
-    def __init__(self, config,logger:SegmentedJsonlLogger):
-        super(DQNRunner, self).__init__(config,logger)
+    def __init__(self, config, logger: SegmentedJsonlLogger | None = None, checkpoint_dir=None, allow_saving: bool = True):
+        super(DQNRunner, self).__init__(
+            config,
+            logger,
+            checkpoint_dir=checkpoint_dir,
+            allow_saving=allow_saving,
+        )
 
     def run(self,stop_event:threading.Event=None):
         start = time.time()
@@ -59,11 +64,21 @@ class DQNRunner(Runner):
 
 
     @torch.no_grad()
-    def collect(self,obs,n_envs,masked_acts=None):
+    def collect(self,obs,n_envs,masked_acts=None, deterministic: bool = False):
         self.trainer.prep_rollout()
         obs_t = check(obs, torch.float32, device=self.device)
         masked_acts_t = check(masked_acts, torch.float32, device=self.device) if masked_acts is not None else None
-        actions_t = self.policy.get_actions(obs_t,available_actions=masked_acts_t)
+        epsilon = self.policy.epsilon
+        if deterministic:
+            self.policy.epsilon = 0.0
+        try:
+            actions_t = self.policy.get_actions(
+                obs_t,
+                available_actions=masked_acts_t,
+                deterministic=deterministic,
+            )
+        finally:
+            self.policy.epsilon = epsilon
         actions = np.array(np.split(tensor_to_numpy(actions_t), n_envs))
         return actions
 
@@ -73,31 +88,38 @@ class DQNRunner(Runner):
 
     @torch.no_grad()
     def eval(self, total_num_steps:int):
-        # only 1 env for eval
-        eval_obs, _ = self.eval_envs.reset()
-
-        self.trainer.prep_rollout()
-        eval_tot_rewards=[]
-        for _ in range(self.app_cfg.eval_episodes):
-            eval_episode_rewards = []
-            while True:
-                if isinstance(self.envs.observation_space, Discrete):
-                    eval_obs = np.expand_dims(eval_obs, axis=1)
-                actions = self.collect(eval_obs,self.n_eval_envs)
-                eval_obs, eval_rewards, eval_dones, eval_infos = self.eval_envs.step(actions.squeeze(axis=1))
-                eval_episode_rewards.append(eval_rewards)
-                if np.any(eval_dones):
-                    break
-            eval_episode_rewards = np.array(eval_episode_rewards)
-            eval_tot_rewards.append(np.sum(eval_episode_rewards))
-        mean_eval_rewards = np.mean(eval_tot_rewards[-100:])
+        metrics = self.evaluate_model(self.app_cfg.eval_episodes, deterministic=True)
+        mean_eval_rewards = metrics["average_episode_reward"]
         if mean_eval_rewards > self.best_reward:
             self.save(is_best=True)
-            self.best_reward=mean_eval_rewards
             self.best_reward=mean_eval_rewards
         eval_env_infos = {'eval_average_episode_rewards': mean_eval_rewards}
         print(f"eval average episode rewards: {mean_eval_rewards:.2f}")
         self.log_env(eval_env_infos, total_num_steps)
+
+    @torch.no_grad()
+    def evaluate_model(self, episodes: int, deterministic: bool = False):
+        self.trainer.prep_rollout()
+        eval_tot_rewards = []
+        step_rewards = []
+        for _ in range(episodes):
+            eval_obs, _ = self.eval_envs.reset()
+            eval_episode_rewards = []
+            while True:
+                if isinstance(self.envs.observation_space, Discrete):
+                    eval_obs = np.expand_dims(eval_obs, axis=1)
+                actions = self.collect(eval_obs, self.n_eval_envs, deterministic=deterministic)
+                eval_obs, eval_rewards, eval_dones, _ = self.eval_envs.step(actions.squeeze(axis=1))
+                step_rewards.append(float(np.mean(eval_rewards)))
+                eval_episode_rewards.append(eval_rewards)
+                if np.any(eval_dones):
+                    break
+            eval_tot_rewards.append(float(np.sum(np.array(eval_episode_rewards))))
+
+        return {
+            "average_step_reward": float(np.mean(step_rewards)) if step_rewards else 0.0,
+            "average_episode_reward": float(np.mean(eval_tot_rewards)) if eval_tot_rewards else 0.0,
+        }
 
     @torch.no_grad()
     def render(self):

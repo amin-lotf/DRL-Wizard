@@ -14,7 +14,13 @@ from drl_wizard.configs.app_cfg import AppConfig
 
 
 class Runner(object):
-    def __init__(self, config: AppConfig,logger:SegmentedJsonlLogger):
+    def __init__(
+        self,
+        config: AppConfig,
+        logger: SegmentedJsonlLogger | None = None,
+        checkpoint_dir: Path | None = None,
+        allow_saving: bool = True,
+    ):
         self.app_cfg: AppConfig = config
         self.algo_cfg: SACConfig = config.algo_cfg
         self.envs = make_train_env(config, is_eval=False)
@@ -28,8 +34,15 @@ class Runner(object):
         self.best_reward = -np.inf
         self.run_dir = Path(config.run_dir)
         self.logger = logger
+        self.allow_saving = allow_saving
         self.save_dir = self.run_dir / 'models'
-        self.save_dir.mkdir(parents=True, exist_ok=True)
+        if self.allow_saving:
+            self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.checkpoint_dir = (
+            Path(checkpoint_dir)
+            if checkpoint_dir is not None
+            else Path(logger.checkpoints_path) if logger is not None else None
+        )
         if self.algo_cfg.num_agents == 1:
             q_input = self.envs.observation_space
             shared_obs_space = None
@@ -57,6 +70,9 @@ class Runner(object):
     def eval(self,total_num_steps:int):
         raise NotImplementedError
 
+    def evaluate_model(self, episodes: int, deterministic: bool = False):
+        raise NotImplementedError
+
     def render(self):
         raise NotImplementedError
 
@@ -66,9 +82,25 @@ class Runner(object):
         train_infos = self.trainer.train(self.buffer)
         return train_infos
 
+    def close(self):
+        for env in (self.envs, self.eval_envs, self.render_env):
+            if env is None:
+                continue
+            try:
+                env.close()
+            except Exception:
+                pass
+
+    def _get_checkpoint_dir(self) -> Path:
+        if self.checkpoint_dir is None:
+            raise RuntimeError("Checkpoint directory is not configured for this runner.")
+        return self.checkpoint_dir
+
     def save(self, is_best=False):
+        if not self.allow_saving:
+            raise RuntimeError("Saving is disabled for this runner.")
         prefix_str = "best_" if is_best else "latest_"
-        path=self.logger.checkpoints_path
+        path = self._get_checkpoint_dir()
         policy_actor = self.trainer.policy.actor
         torch.save(policy_actor.state_dict(), str(path / f"{prefix_str}actor.pt"))
         q1_net = self.trainer.policy.q_net1
@@ -80,12 +112,12 @@ class Runner(object):
 
     def restore(self, is_best=False):
         prefix_str = "best_" if is_best else "latest_"
-        path = self.logger.checkpoints_path
-        policy_actor_state_dict = torch.load(str(path / f"{prefix_str}actor.pt"))
+        path = self._get_checkpoint_dir()
+        policy_actor_state_dict = torch.load(str(path / f"{prefix_str}actor.pt"), map_location=self.device)
         self.policy.actor.load_state_dict(policy_actor_state_dict)
-        q1_net_state_dict = torch.load(str(path / f"{prefix_str}q1_net.pt"))
+        q1_net_state_dict = torch.load(str(path / f"{prefix_str}q1_net.pt"), map_location=self.device)
         self.policy.q_net1.load_state_dict(q1_net_state_dict)
-        q2_net_state_dict = torch.load(str(path / f"{prefix_str}q2_net.pt"))
+        q2_net_state_dict = torch.load(str(path / f"{prefix_str}q2_net.pt"), map_location=self.device)
         self.policy.q_net2.load_state_dict(q2_net_state_dict)
         log_alpha = torch.load(str(path / f"{prefix_str}log_alpha.pt"), map_location=self.app_cfg.resolved_device)
         self.policy.log_alpha.data.copy_(log_alpha)
@@ -93,11 +125,13 @@ class Runner(object):
         self.policy.tgt_q_net2.load_state_dict(q2_net_state_dict)
 
     def log_train(self, train_infos, cur_steps):
-        self.logger.log_data(train_infos, cur_steps, log_type=ResultType.TRAIN)
+        if self.logger is not None:
+            self.logger.log_data(train_infos, cur_steps, log_type=ResultType.TRAIN)
 
     def log_env(self, env_infos, cur_steps):
-        self.logger.log_data(env_infos, cur_steps, log_type=ResultType.EVALUATE)
+        if self.logger is not None:
+            self.logger.log_data(env_infos, cur_steps, log_type=ResultType.EVALUATE)
 
     def log_render(self,frame):
-        self.logger.log_frame(frame)
-
+        if self.logger is not None:
+            self.logger.log_frame(frame)

@@ -78,6 +78,9 @@ class FixedNormal(torch.distributions.Normal):
         action = torch.tanh(mean) * self.action_scale + self.action_bias
         return action
 
+    def mode(self):
+        return self.mean_action()
+
     def entropy(self):
         return super().entropy().sum(dim=-1)
 

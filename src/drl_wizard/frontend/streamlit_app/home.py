@@ -11,8 +11,10 @@ st.markdown(
     """
     - Go to **Train** to start a run.
     - Check **Jobs** to see recent job IDs you’ve launched.
+    - Use **Evaluate Model** to load a saved checkpoint and test it.
     """
 )
 
 st.page_link("pages/training.py", label="➡️ Train", icon="🏁")
 st.page_link("pages/training_list.py", label="➡️ Jobs", icon="📋")
+st.page_link("pages/evaluate_model.py", label="➡️ Evaluate Model", icon="🧪")

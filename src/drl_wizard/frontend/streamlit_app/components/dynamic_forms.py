@@ -160,6 +160,31 @@ def selector_action_env_algo(
     Radio for action type, then env select (filtered), then algo select (filtered by env action).
     Returns (chosen_env, chosen_algo)
     """
+    chosen_env = selector_action_env(envs, key_prefix=key_prefix)
+
+    # Filter algos by env's action type
+    if chosen_env:
+        ea = chosen_env.get("supported_action")
+        algo_options = [a for a in algos if ea in (a.get("action_type") or [])]
+    else:
+        algo_options = []
+
+    chosen_algo = st.selectbox(
+        "Algorithm",
+        options=algo_options,
+        format_func=lambda a: f"{a.get('algo_name')}",
+        index=None,
+        disabled=len(algo_options) == 0,
+        key=f"{key_prefix}__algo",
+    )
+
+    return chosen_env, chosen_algo
+
+
+def selector_action_env(
+    envs: Iterable[Dict[str, Any]],
+    key_prefix: str,
+) -> Optional[Dict[str, Any]]:
     all_act_types = sorted({e.get("supported_action") for e in envs})
     chosen_type = st.radio(
         "Action type",
@@ -179,21 +204,4 @@ def selector_action_env_algo(
         disabled=len(env_options) == 0,
         key=f"{key_prefix}__env",
     )
-
-    # Filter algos by env's action type
-    if chosen_env:
-        ea = chosen_env.get("supported_action")
-        algo_options = [a for a in algos if ea in (a.get("action_type") or [])]
-    else:
-        algo_options = []
-
-    chosen_algo = st.selectbox(
-        "Algorithm",
-        options=algo_options,
-        format_func=lambda a: f"{a.get('algo_name')}",
-        index=None,
-        disabled=len(algo_options) == 0,
-        key=f"{key_prefix}__algo",
-    )
-
-    return chosen_env, chosen_algo
+    return chosen_env
