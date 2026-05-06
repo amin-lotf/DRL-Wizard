@@ -1,8 +1,20 @@
 from contextlib import asynccontextmanager
-from sqlalchemy import text
+import os
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+
 from drl_wizard.backend.routers import training_route
 from drl_wizard.backend.services.storage.database import engine, Base
+
+
+def _get_cors_origins() -> list[str]:
+    raw_origins = os.getenv("DRL_WIZARD_CORS_ORIGINS", "").strip()
+    if not raw_origins:
+        return ["*"]
+    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    return origins or ["*"]
 
 
 def create_app() -> FastAPI:
@@ -19,6 +31,14 @@ def create_app() -> FastAPI:
         # optional: await engine.dispose()
 
     app = FastAPI(lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_get_cors_origins(),
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Content-Disposition"],
+    )
     # Base.metadata.create_all(bind=engine)
     app.include_router(training_route.router)
     @app.get("/healthz")

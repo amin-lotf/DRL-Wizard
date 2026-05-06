@@ -1,9 +1,12 @@
 # backend/services/training_service/training_route.py
 from __future__ import annotations
 
+import base64
 import os
+from pathlib import Path as FsPath
 from typing import Annotated, List
 
+import anyio
 from fastapi import APIRouter, status, HTTPException, Path, Depends, Response
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
@@ -15,6 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from drl_wizard.backend.schemas import EnvResponse, JobRequest, JobResponse
 from drl_wizard.backend.schemas.algo_cfg_schema import AlgoConfigSchema
 from drl_wizard.backend.schemas.algo_schema import AlgoResponse
+from drl_wizard.backend.schemas.evaluation_schema import (
+    SavedRunDetailsResponse,
+    SavedRunDiscoveryResponse,
+    SavedRunEvaluationRequest,
+    SavedRunEvaluationResponse,
+    SavedRunSummarySchema,
+)
 from drl_wizard.backend.schemas.general_cfg_schema import GeneralConfigSchema
 from drl_wizard.backend.schemas.log_cfg_schema import LogConfigSchema
 from drl_wizard.backend.schemas.manifest_schema import ManifestSchema
@@ -33,6 +43,16 @@ from drl_wizard.backend.services.mappers import (
     log_schema_to_domain,
 )
 from drl_wizard.backend.services.storage.database import get_db
+from drl_wizard.backend.services.training_service.evaluation_service import (
+    DEFAULT_RUNS_DIR,
+    EvaluationSummary,
+    RunDiscoveryResult,
+    SavedRunDetails,
+    SavedRunSummary,
+    discover_runs_for_environment,
+    evaluate_saved_run,
+    load_saved_run,
+)
 from drl_wizard.backend.services.training_service.jobs import JobState
 from drl_wizard.backend.services.training_service.repository import JobRepository
 from drl_wizard.backend.services.training_service.service import TrainingService
@@ -63,6 +83,112 @@ svc_dependency = Annotated[TrainingService, Depends(get_training_service)]
 router = APIRouter(prefix="/training_service", tags=["training_service"])
 
 # --- routes ------------------------------------------------------------------
+
+
+def _resolve_saved_run_dir(run_id: str) -> FsPath:
+    runs_root = DEFAULT_RUNS_DIR.resolve()
+    run_dir = (runs_root / run_id).resolve()
+    try:
+        run_dir.relative_to(runs_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid run identifier") from exc
+
+    if not run_dir.exists() or not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Saved run '{run_id}' not found")
+    return run_dir
+
+
+def _saved_run_summary_to_schema(summary: SavedRunSummary) -> SavedRunSummarySchema:
+    return SavedRunSummarySchema(
+        run_id=summary.run_id,
+        run_dir=str(summary.run_dir),
+        env_id=summary.env_id,
+        algo_id=summary.algo_id,
+        checkpoint_label=summary.checkpoint_label,
+        checkpoint_path=str(summary.checkpoint_path),
+    )
+
+
+def _saved_run_details_to_schema(details: SavedRunDetails) -> SavedRunDetailsResponse:
+    return SavedRunDetailsResponse(
+        summary=_saved_run_summary_to_schema(details.summary),
+        env_config=details.env_config,
+        algo_config=details.algo_config,
+        log_config=details.log_config,
+        raw_app_config=details.raw_app_config,
+        eval_episodes_default=int(details.app_config.eval_episodes),
+    )
+
+
+def _saved_run_evaluation_to_schema(result: EvaluationSummary) -> SavedRunEvaluationResponse:
+    encoded_video = None
+    if result.rendered_video_bytes:
+        encoded_video = base64.b64encode(result.rendered_video_bytes).decode("ascii")
+
+    return SavedRunEvaluationResponse(
+        average_step_reward=result.average_step_reward,
+        average_episode_reward=result.average_episode_reward,
+        rendered_video_base64=encoded_video,
+        rendered_video_mime_type=result.rendered_video_mime_type,
+        render_warning=result.render_warning,
+    )
+
+
+@router.get(
+    "/saved_runs",
+    status_code=status.HTTP_200_OK,
+    response_model=SavedRunDiscoveryResponse,
+)
+async def list_saved_runs(env_id: str) -> SavedRunDiscoveryResponse:
+    discovery: RunDiscoveryResult = await anyio.to_thread.run_sync(discover_runs_for_environment, env_id)
+    return SavedRunDiscoveryResponse(
+        runs=[_saved_run_summary_to_schema(run) for run in discovery.runs],
+        warnings=discovery.warnings,
+    )
+
+
+@router.get(
+    "/saved_runs/{run_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=SavedRunDetailsResponse,
+)
+async def get_saved_run(
+    run_id: Annotated[str, Path(pattern=r"^[A-Za-z0-9._-]+$")],
+) -> SavedRunDetailsResponse:
+    run_dir = _resolve_saved_run_dir(run_id)
+    try:
+        details: SavedRunDetails = await anyio.to_thread.run_sync(load_saved_run, run_dir)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _saved_run_details_to_schema(details)
+
+
+@router.post(
+    "/saved_runs/{run_id}/evaluate",
+    status_code=status.HTTP_200_OK,
+    response_model=SavedRunEvaluationResponse,
+)
+async def evaluate_saved_run_route(
+    request: SavedRunEvaluationRequest,
+    run_id: Annotated[str, Path(pattern=r"^[A-Za-z0-9._-]+$")],
+) -> SavedRunEvaluationResponse:
+    run_dir = _resolve_saved_run_dir(run_id)
+    try:
+        result: EvaluationSummary = await anyio.to_thread.run_sync(
+            evaluate_saved_run,
+            run_dir,
+            request.env_id,
+            request.episodes,
+            request.render,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _saved_run_evaluation_to_schema(result)
+
 
 @router.post("/train", status_code=status.HTTP_200_OK, response_model=JobResponse)
 async def start_train(svc: svc_dependency, train_request: JobRequest) -> JobResponse:

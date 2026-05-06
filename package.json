@@ -1,0 +1,13 @@
+{
+  "name": "drlwizard",
+  "private": true,
+  "workspaces": [
+    "src/drl_wizard/frontend/react"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace drl-wizard-react --",
+    "build": "npm run build --workspace drl-wizard-react",
+    "preview": "npm run preview --workspace drl-wizard-react --",
+    "react:install": "npm install"
+  }
+}
