@@ -8,6 +8,7 @@ from typing import Any
 from drl_wizard.algorithms.runners.factory import build_gym_runner
 from drl_wizard.backend.schemas.app_cfg_schema import AppConfigSchema
 from drl_wizard.backend.services.mappers import app_schema_to_domain
+from drl_wizard.common.video import DEFAULT_VIDEO_FPS, encode_video
 from drl_wizard.common.types import AlgoType
 from drl_wizard.configs.app_cfg import AppConfig
 from drl_wizard.configs.general_cfg import GeneralConfig
@@ -55,6 +56,9 @@ class RunDiscoveryResult:
 class EvaluationSummary:
     average_step_reward: float
     average_episode_reward: float
+    rendered_video_bytes: bytes | None = None
+    rendered_video_mime_type: str | None = None
+    render_warning: str | None = None
 
 
 def get_environment_key(saved_env_config: dict[str, Any]) -> str | None:
@@ -146,6 +150,7 @@ def evaluate_saved_run(
     run_dir: str | Path,
     env_id: str,
     episodes: int | None = None,
+    render: bool = False,
 ) -> EvaluationSummary:
     details = load_saved_run(run_dir)
     if details.summary.env_id != env_id:
@@ -157,32 +162,90 @@ def evaluate_saved_run(
     if eval_episodes <= 0:
         raise ValueError("Evaluation episodes must be greater than zero.")
 
+    render_warning: str | None = None
+    render_enabled = bool(render)
+
+    try:
+        runner = _build_evaluation_runner(
+            details=details,
+            env_id=env_id,
+            eval_episodes=eval_episodes,
+            render=render_enabled,
+        )
+    except Exception as exc:
+        if not render_enabled:
+            raise
+        render_enabled = False
+        render_warning = f"Rendering unavailable: {exc}"
+        runner = _build_evaluation_runner(
+            details=details,
+            env_id=env_id,
+            eval_episodes=eval_episodes,
+            render=False,
+        )
+
+    try:
+        runner.restore(is_best=details.summary.checkpoint_label == "best")
+        metrics = runner.evaluate_model(
+            eval_episodes,
+            deterministic=True,
+            render_first_episode=render_enabled,
+        )
+    finally:
+        runner.close()
+
+    encoded_video = None
+    render_warning = _merge_render_warning(render_warning, metrics.get("render_warning"))
+    rendered_frames = metrics.get("rendered_frames") or []
+    render_fps = metrics.get("render_fps") or DEFAULT_VIDEO_FPS
+
+    if render_enabled and rendered_frames:
+        try:
+            encoded_video = encode_video(rendered_frames, fps=int(render_fps))
+        except Exception as exc:
+            render_warning = _merge_render_warning(render_warning, f"Video encoding failed: {exc}")
+    elif render and not render_warning:
+        render_warning = "Rendering was requested, but no video was generated."
+
+    return EvaluationSummary(
+        average_step_reward=float(metrics["average_step_reward"]),
+        average_episode_reward=float(metrics["average_episode_reward"]),
+        rendered_video_bytes=encoded_video.data if encoded_video is not None else None,
+        rendered_video_mime_type=encoded_video.mime_type if encoded_video is not None else None,
+        render_warning=render_warning,
+    )
+
+
+def _build_evaluation_runner(
+    details: SavedRunDetails,
+    env_id: str,
+    eval_episodes: int,
+    render: bool,
+):
     eval_config = replace(
         details.app_config,
         env_id=env_id,
         n_envs=1,
         n_eval_envs=1,
         use_eval=False,
-        is_render=False,
+        is_render=render,
         eval_episodes=eval_episodes,
     )
-    runner = build_gym_runner(
+    return build_gym_runner(
         eval_config,
         logger=None,
         checkpoint_dir=details.summary.checkpoint_dir,
         allow_saving=False,
     )
 
-    try:
-        runner.restore(is_best=details.summary.checkpoint_label == "best")
-        metrics = runner.evaluate_model(eval_episodes, deterministic=True)
-    finally:
-        runner.close()
 
-    return EvaluationSummary(
-        average_step_reward=float(metrics["average_step_reward"]),
-        average_episode_reward=float(metrics["average_episode_reward"]),
-    )
+def _merge_render_warning(current: str | None, extra: Any) -> str | None:
+    extra_text = str(extra).strip() if extra is not None else ""
+    if not extra_text:
+        return current
+    if current:
+        return f"{current} {extra_text}"
+    return extra_text
 
 
 def _resolve_checkpoint(checkpoint_dir: Path, algo_id: AlgoType) -> tuple[str, Path, Path]:

@@ -66,6 +66,13 @@ episodes = st.number_input(
     step=1,
     help="This is separate from the saved training config.",
 )
+render_video = st.checkbox(
+    "Render evaluation video",
+    value=False,
+    help="Render the first evaluation episode and display it after evaluation.",
+)
+if render_video:
+    st.info("Rendering may be slower.")
 
 meta_left, meta_right = st.columns(2)
 with meta_left:
@@ -90,11 +97,24 @@ if st.button("Start Evaluation", type="primary"):
                 run_dir=run_details.summary.run_dir,
                 env_id=selected_env_id,
                 episodes=int(episodes),
+                render=render_video,
             )
         result_left, result_right = st.columns(2)
         with result_left:
             st.metric("Average Step Reward", f"{result.average_step_reward:.4f}")
         with result_right:
             st.metric("Average Episode Reward", f"{result.average_episode_reward:.4f}")
+        if render_video:
+            st.markdown("**Rendered sample episode**")
+            if result.rendered_video_bytes:
+                st.video(
+                    result.rendered_video_bytes,
+                    format=result.rendered_video_mime_type or "video/mp4",
+                )
+                if result.render_warning:
+                    st.warning(result.render_warning)
+            else:
+                reason = result.render_warning or "No video was generated."
+                st.info(f"Rendered sample episode unavailable: {reason}")
     except Exception as exc:
         st.error(f"Evaluation failed: {exc}")

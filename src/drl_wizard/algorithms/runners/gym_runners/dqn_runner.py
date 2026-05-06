@@ -98,28 +98,99 @@ class DQNRunner(Runner):
         self.log_env(eval_env_infos, total_num_steps)
 
     @torch.no_grad()
-    def evaluate_model(self, episodes: int, deterministic: bool = False):
+    def evaluate_model(
+        self,
+        episodes: int,
+        deterministic: bool = False,
+        render_first_episode: bool = False,
+    ):
         self.trainer.prep_rollout()
         eval_tot_rewards = []
         step_rewards = []
-        for _ in range(episodes):
-            eval_obs, _ = self.eval_envs.reset()
-            eval_episode_rewards = []
-            while True:
-                if isinstance(self.envs.observation_space, Discrete):
-                    eval_obs = np.expand_dims(eval_obs, axis=1)
-                actions = self.collect(eval_obs, self.n_eval_envs, deterministic=deterministic)
-                eval_obs, eval_rewards, eval_dones, _ = self.eval_envs.step(actions.squeeze(axis=1))
-                step_rewards.append(float(np.mean(eval_rewards)))
-                eval_episode_rewards.append(eval_rewards)
-                if np.any(eval_dones):
-                    break
-            eval_tot_rewards.append(float(np.sum(np.array(eval_episode_rewards))))
+        rendered_frames = []
+        render_warning = None
+        render_fps = self._get_render_fps()
+        remaining_episodes = episodes
 
-        return {
+        if render_first_episode:
+            if self.render_env is None:
+                render_warning = "Render environment is not available for this evaluation."
+            else:
+                try:
+                    episode_reward, episode_step_rewards, rendered_frames = self._evaluate_episode(
+                        self.render_env,
+                        deterministic=deterministic,
+                        capture_frames=True,
+                    )
+                    eval_tot_rewards.append(episode_reward)
+                    step_rewards.extend(episode_step_rewards)
+                    remaining_episodes -= 1
+                    if not rendered_frames:
+                        render_warning = (
+                            "Rendering was requested, but the environment did not return any frames."
+                        )
+                except Exception as exc:
+                    render_warning = f"Rendering failed: {exc}"
+
+        for _ in range(remaining_episodes):
+            episode_reward, episode_step_rewards, _ = self._evaluate_episode(
+                self.eval_envs,
+                deterministic=deterministic,
+                capture_frames=False,
+            )
+            eval_tot_rewards.append(episode_reward)
+            step_rewards.extend(episode_step_rewards)
+
+        results = {
             "average_step_reward": float(np.mean(step_rewards)) if step_rewards else 0.0,
             "average_episode_reward": float(np.mean(eval_tot_rewards)) if eval_tot_rewards else 0.0,
         }
+        if render_first_episode:
+            results["rendered_frames"] = rendered_frames
+            results["render_fps"] = render_fps
+            results["render_warning"] = render_warning
+        return results
+
+    def _evaluate_episode(self, envs, deterministic: bool = False, capture_frames: bool = False):
+        env_count = getattr(envs, "num_envs", self.n_eval_envs)
+        eval_obs, _ = envs.reset()
+        eval_episode_rewards = []
+        episode_step_rewards = []
+        rendered_frames = []
+
+        if capture_frames:
+            frame = envs.render()
+            if frame is not None:
+                rendered_frames.append(frame)
+
+        while True:
+            policy_obs = eval_obs
+            if isinstance(self.envs.observation_space, Discrete):
+                policy_obs = np.expand_dims(policy_obs, axis=1)
+            actions = self.collect(policy_obs, env_count, deterministic=deterministic)
+            eval_obs, eval_rewards, eval_dones, _ = envs.step(actions.squeeze(axis=1))
+            episode_step_rewards.append(float(np.mean(eval_rewards)))
+            eval_episode_rewards.append(eval_rewards)
+            if np.any(eval_dones):
+                break
+            if capture_frames:
+                frame = envs.render()
+                if frame is not None:
+                    rendered_frames.append(frame)
+
+        return float(np.sum(np.array(eval_episode_rewards))), episode_step_rewards, rendered_frames
+
+    def _get_render_fps(self, default_fps: int = 30) -> int:
+        if self.render_env is None:
+            return default_fps
+        try:
+            metadata = self.render_env.get_attr("metadata")[0]
+        except Exception:
+            metadata = getattr(self.render_env, "metadata", None)
+        render_fps = metadata.get("render_fps") if isinstance(metadata, dict) else None
+        if isinstance(render_fps, (int, float)) and render_fps > 0:
+            return int(round(render_fps))
+        return default_fps
 
     @torch.no_grad()
     def render(self):

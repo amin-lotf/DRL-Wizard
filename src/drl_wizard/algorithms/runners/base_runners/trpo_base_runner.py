@@ -71,7 +71,12 @@ class Runner(object):
     def eval(self,total_num_steps:int):
         raise NotImplementedError
 
-    def evaluate_model(self, episodes: int, deterministic: bool = False):
+    def evaluate_model(
+        self,
+        episodes: int,
+        deterministic: bool = False,
+        render_first_episode: bool = False,
+    ):
         raise NotImplementedError
 
     def render(self):
