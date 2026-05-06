@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=70", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "drl-wizard"
@@ -11,55 +11,57 @@ requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Amin Lotfolahi" }]
 
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-]
+
 
 
 # core dependencies (you can adjust later)
 dependencies = [
-  # Core runtime deps
-  "sqlalchemy>=2.0",
-  "aiosqlite>=0.20",
-  "tensorboard>=2.14",
-  "gymnasium[atari,mujoco]>=0.29",
-  "gymnasium-robotics>=1.2",
-  "mpe2>=0.0.1",                # ensure this exists on PyPI
-  "fastapi[standard]>=0.115",
-  "uvicorn[standard]>=0.30",
-  "pandas>=2.2",
-  "stable-baselines3>=2.3",
-  "ale-py>=0.10",
-  "opencv-python>=4.9",
+    # Core runtime deps
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    "tensorboard>=2.14",
+    "gymnasium[atari,mujoco]>=0.29",
+    "gymnasium-robotics>=1.2",
+    "mpe2>=0.0.1", # ensure this exists on PyPI
+    "fastapi[standard]>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pandas>=2.2",
+    "stable-baselines3>=2.3",
+    "ale-py>=0.10",
+    "opencv-python>=4.9",
+    "streamlit>=1.38",
+    "pandas-stubs>=2.2",
 ]
 
 [project.optional-dependencies]
-ui = [
-  "streamlit>=1.38",
-  "pandas-stubs>=2.2",
-]
-
 dev = [
-  "pytest>=8",
-  "pytest-asyncio>=0.23",
-  "ruff>=0.6",
-  "mypy>=1.10",
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "mypy>=1.10",
 ]
 
-# optional CLI commands
-[project.scripts]
-drl-wizard-api = "drl_wizard.backend.cli:main"
-drl-wizard-ui  = "drl_wizard.frontend.streamlit_app.cli:main"
-drl-wizard-run = "drl_wizard.cli:main"
 
-# tell setuptools where to find your package (under src/)
-[tool.setuptools.packages.find]
-where = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/drl_wizard"]
+
+
+[tool.coverage.run]
+source = ["src"]
 include = ["drl_wizard*"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
 
 [project.urls]
 Homepage = "https://github.com/amin-lotf/DRL-Wizard"

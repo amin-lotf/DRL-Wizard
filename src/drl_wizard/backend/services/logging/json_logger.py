@@ -44,8 +44,8 @@ class SegmentedJsonlLogger:
         self.job_id = job_id
         self.base = Path(save_dir) / str(job_id)
         self.log_dir = self.base / "log"
-        (self.log_dir / ResultType.TRAIN).mkdir(parents=True, exist_ok=True)
-        (self.log_dir / ResultType.EVALUATE).mkdir(parents=True, exist_ok=True)
+        (self.log_dir / ResultType.TRAIN.value).mkdir(parents=True, exist_ok=True)
+        (self.log_dir / ResultType.EVALUATE.value).mkdir(parents=True, exist_ok=True)
 
         self.manifest_path = self.base / "manifest.json"
         self.config_path = self.base / "configs" / "app.json"
@@ -196,6 +196,7 @@ class SegmentedJsonlLogger:
             return
         max_step = max(r["general"]["step"] for r in buf)
         path = self._ensure_segment(kind, max_step)
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         if self.compress:
             cctx = zstd.ZstdCompressor(level=3)
